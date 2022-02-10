@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-train_target = 1e-6
+train_target = 1e-8
 # scales = [0.01,0.05,0.1,0.5,1,2,3,5] #1e-6 target v1
 # losses = np.array([33,53,44,35,43,121,564,1442])*1e-4 # 1e-6 target v1
 # scales = [0.05,0.1,0.5,1,2,3,5] # 1e-5 target v2
@@ -20,18 +20,32 @@ train_target = 1e-6
 # losses = np.array([57,63,83,46,85,344,1591,12744])*1e-4 # 1e-8 target v1 teacher is fixed in the beginning
 # scales = [0.01,0.05,0.1,0.5,1,2,3,5] # 1e-8 target v2 teacher is fixed in the beginning
 # losses = np.array([207,210,194,48,65,332,1503,11110])*1e-4 # 1e-8 target v2 teacher is fixed in the beginning
-scales = [0.01,1,2,3,5] # 1e-8 target v3 - post overparametrization fix
-losses = np.array([1.0535, 85.087, 200, 300, 700])*1e-6 # 1e-8 target v3 - post overparametrization fix
-plt.plot(scales, losses, marker="o")
-plt.plot(scales,[1e-8]*5, marker="o")
+# scales = [0.01,1,2,3,5] # 1e-8 target v3 - post overparametrization fix
+# losses = np.array([1.0535, 85.087, 200, 300, 700])*1e-6 # 1e-8 target v3 - post overparametrization fix
+# scales = [0.01,0.03,0.1] # 1e-8 target v4 - post overparametrization fix, no seed
+# losses = np.array([4.5710e-07,1.0131e-06,1.5491e-06]) # 1e-8 target v4 - post overparametrization fix, no seed
+# scales = [0.01,0.03,0.1,0.3,1,3,10] # 1e-7 target v1 - post overparametrization fix, no seed, overparam 100
+# losses = np.array([2.9937e-06, 3.1005e-06,3.4133e-06,1.1495e-05,9.2672e-05,0.0006,0.0584]) # 1e-7 target v1 - post overparametrization fix, no seed, overparam 100
+# scales = [0.01,0.03,0.1,0.32,1,3,6,9,10,11,12,13,14,15,16,17,17.5] # 1e-8 target v5 - post overparametrization fix, seed 100
+# losses = np.array([1.5932e-05,1.9082e-05,4.5967e-05,5.8333e-05,0.0002,0.0006,0.0066,0.0324,0.0492,0.0720,0.1019,0.1407,0.1196,0.0841,0.0184,0.0138,0.0038]) # 1e-8 target v5 - post overparametrization fix, seed 100
+# scales = [1,5,10,11,12,13,14,15,16,17,18,18.25] # right side test
+# losses = [0.0001,0.0013,0.0211,0.0312,0.0444,0.0578,0.0403,0.0345,0.0369,0.0472,0.0540,0.2776] #right side test
+scales = [0.01,0.03,0.1,0.32,1,3,10,14] # 1e-8 target v5 - post overparametrization fix, seed 100, subset
+losses = np.array([1.5932e-05,1.9082e-05,4.5967e-05,5.8333e-05,0.0002,0.0006,0.0492,0.1196]) # 1e-8 target v5 - post overparametrization fix, seed 100, subset
+# scales = [0.001,0.003,0.01,0.03,0.1,0.3,1,3] #1e-8 target x4, lr 0.33
+# losses = [4.8006e-08,1.9594e-05,3.4882e-05,3.9007e-05,3.2687e-05,1.4598e-05,8.9069e-06,1.9840e-05]
+plt.plot(scales,[1e-8]*len(losses), color="tab:orange",marker="o",markersize=10, linewidth=4)
+# plt.plot(scales, losses, color="tab:blue", marker="o",markersize=10, linewidth=4)
 plt.xscale('log')
 plt.yscale("log")
-plt.xlabel("scale")
-plt.ylabel("MSE")
-plt.legend(["test error","training error"])
+plt.xlabel("Scale", fontsize=16)
+plt.ylabel("MSE", fontsize=16,labelpad=0)
+plt.legend(["training error"], loc="upper left", fontsize=14)#,"test error"
 ax = plt.gca()
 ax.set_aspect('auto')
-ax.set_xlim(1e-2, 10)
-ax.set_ylim(1e-9, 1e-2)
+ax.set_xlim(1e-2, 15)
+ax.set_ylim(1e-9, 2e-1)
+ax.tick_params(axis='x',labelsize=12)
+ax.tick_params(axis='y',labelsize=12)
 print(ax.get_ylim())
-plt.savefig("exp2_1e-8v3.png")
+plt.savefig("exp2_1e-8v5_simp.png")
