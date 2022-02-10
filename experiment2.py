@@ -5,15 +5,15 @@ import copy
 from torch import nn
 from torch import optim
 
-
 # Seed the random generator
-np.random.seed(0)
-torch.manual_seed(0)
-
+seed = 100
+np.random.seed(seed)
+torch.manual_seed(seed)
+  
 # Hyperparameters for our network
 input_dim = 3
 hidden_size = 3
-overparam = 100
+overparam = 33
 
 num_param = (input_dim + 1)*hidden_size
 train_data_size = num_param * 4
@@ -38,6 +38,9 @@ for i in range(hidden_size):
 # print(V)
 # print(np.sum(V))
 #print(np.linalg.norm(student[0].weight[0].detach().numpy()))
+
+np.save("hiddenSize_3_seed_100_W.npy", W)
+np.save("hiddenSize_3_seed_100_V.npy", V)
 
 V_torch = torch.from_numpy(V)
 W_torch = torch.from_numpy(W)
@@ -82,12 +85,13 @@ print(X_torch[-1], Y_torch[-1])
 # print(test_data["X"])
 
 ##### Training Part ######
-scalings = [0.5,0.1,0.05]
+scalings = [0.01, 3]
 # scalings = [0.01]
-hidden_size_s =  hidden_size * 16 * overparam
+hidden_size_s =  hidden_size * overparam
 teacher_o = nn.Sequential(nn.Linear(input_dim, hidden_size_s, bias=False),
                                 nn.ReLU(),
                                 nn.Linear(hidden_size_s, 1, bias=False))
+print(teacher_o)
 
 ## takes in a module and applies the specified weight initialization
 def weights_init_normal(m):
@@ -107,13 +111,17 @@ torch.nn.init.xavier_normal_(teacher_o[2].weight)
 
 for scaling in scalings:
     teacher = copy.deepcopy(teacher_o)
-    
     #scale weighting
     with torch.no_grad():
         teacher[0].weight *= scaling
         teacher[2].weight *= scaling
-    # print(teacher[0].weight)
-    learning_rate = 1e-2
+    
+    all_W = copy.deepcopy(teacher[0].weight.detach().unsqueeze(0))
+    all_V = copy.deepcopy(teacher[2].weight.detach().unsqueeze(0))
+    
+    print(all_W)
+
+    learning_rate = 0.25
     target_err = 1e-8
     epoch = 0
 
@@ -121,33 +129,43 @@ for scaling in scalings:
 
     loss = 1
     losses = []
-    with open("hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epoch) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + ".txt", 'w') as f:
+    with open("hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + "_seed_" + str(seed) + ".txt", 'w') as f:
         while loss > target_err:
             optimizer.zero_grad()
             y_hat = teacher(X_torch.float())
+            # print(y_hat)
             diff = torch.abs(y_hat - Y_torch).pow(2)
             loss = torch.mean(diff) # MSE
             loss.backward()
             optimizer.step()
             losses.append(loss.detach().numpy())
             epoch += 1
+            if epoch <= 2000:
+                all_W = torch.cat((all_W,teacher[0].weight.detach().unsqueeze(0)),0)
+                all_V = torch.cat((all_V,teacher[2].weight.detach().unsqueeze(0)),0)
+            elif epoch % 1000 == 0:
+                all_W = torch.cat((all_W,teacher[0].weight.detach().unsqueeze(0)),0)
+                all_V = torch.cat((all_V,teacher[2].weight.detach().unsqueeze(0)),0)
             if epoch % 1000 == 0:
-                #print(epoch, loss)
+                print(epoch, loss)
                 f.write(str(epoch) + ": " + str(loss))
                 f.write('\n')
-            
-    np.save("hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epoch) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + ".npy", losses)  
-
-    # Save model
-    torch.save(teacher.state_dict(), "target_" + str(target_err) + "scale_" + str(scaling) + ".pt")
-    
-    # Test the network
-    teacher.eval()
-    with torch.no_grad():   
-        y_hat = teacher(X_torch_test.float())
-        diff = torch.abs(y_hat - Y_torch_test).pow(2)
-        loss = torch.mean(diff) # MSE
-        print("Scaling: ", scaling, "Loss: ", loss)
-    # print(teacher[0].weight)
-    
-    del teacher
+        
+        all_weights = {"W": all_W, "V": all_V}
+        save_name = "hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epoch) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + "_seed_" + str(seed)   
+        np.save(save_name + ".npy", losses)  
+        torch.save(all_weights, save_name + "_weights.pt")
+        # Save model
+        # 5torch.save(teacher.state_dict(), "target_" + str(target_err) + "scale_" + str(scaling) + ".pt")
+        
+        # Test the network
+        teacher.eval()
+        with torch.no_grad():  
+            y_hat = teacher(X_torch_test.float())
+            diff = torch.abs(y_hat - Y_torch_test).pow(2)
+            loss = torch.mean(diff) # MSE
+            f.write("Scaling: " + str(scaling) + "Loss: " + str(loss))
+            print("Scaling: ", scaling, "Loss: ", loss)
+        # print(teacher[0].weight)
+        
+        del teacher
