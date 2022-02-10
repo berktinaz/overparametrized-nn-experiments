@@ -16,8 +16,8 @@ hidden_sizes = [3]
 # hidden_sizes = [20, 100, 200, 500]
 # hidden_sizes = [50, 250, 500, 1250]
 # hidden_sizes = [20]
-overparam_factors = [1,2,3,6,10,100,1000]
-
+# overparam_factors = [1,2,3,6,10,100,1000]
+overparam_factors = [1,10,100]
 for hidden_size in hidden_sizes:
     ####### STUDENT PART #######
     num_param = (input_dim + 1)*hidden_size
@@ -70,13 +70,13 @@ for hidden_size in hidden_sizes:
 
     for overparam in overparam_factors:
         #### TRAINING PART (TEACHER) ######
-        hidden_size_s =  hidden_size * 16 * overparam
+        hidden_size_s =  hidden_size * overparam # for this problem overparam is defined as such
         teacher = nn.Sequential(nn.Linear(input_dim, hidden_size_s, bias=False),
                             nn.ReLU(),
                             nn.Linear(hidden_size_s, 1, bias=False))
 
-        learning_rate = 3*1e-4
-        epochs = int(1e4)
+        learning_rate = 0.2
+        epochs = int(2e3)
 
         optimizer = optim.SGD(teacher.parameters(), lr=learning_rate)
 
@@ -89,7 +89,7 @@ for hidden_size in hidden_sizes:
             loss.backward()
             optimizer.step()
             losses.append(loss.detach().numpy())
-        np.save("hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epochs) + ".npy", losses)  
+        np.save("./exp1_results/hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epochs) + ".npy", losses)  
         del teacher
     
 # TODO: For lower LR increase epoch num, Also try lower data-param ratio (1/10) and start from 200 neurons (something like that)
