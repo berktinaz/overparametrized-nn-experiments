@@ -1,3 +1,4 @@
+from random import uniform
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -11,17 +12,23 @@ np.random.seed(seed)
 torch.manual_seed(seed)
   
 # Hyperparameters for our network
-input_dim = 3
+input_dim = 2
 hidden_size = 3
-overparam = 33
+overparam = 50
+learning_rate = 0.1
+target_err = 1e-8
+scalings = [3, 0.01]
+set_bias = True
 
 num_param = (input_dim + 1)*hidden_size
-train_data_size = num_param * 4
+train_data_size = num_param * 2
 test_data_size = int(1e5)
 print("Data size:", train_data_size)
 
+save_name = "./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_target_" + str(target_err)
+
 # Build the student network
-student = nn.Sequential(nn.Linear(input_dim, hidden_size, bias=False),
+student = nn.Sequential(nn.Linear(input_dim, hidden_size, bias=set_bias),
                     nn.ReLU(),
                     nn.Linear(hidden_size, 1, bias=False))
 print(student)
@@ -35,127 +42,103 @@ for i in range(hidden_size):
     W[i] = input
     V[0,i] = np.random.choice([-1,1], 1, p=[0.5,0.5]) / np.sqrt(hidden_size)
     
-# print(V)
-# print(np.sum(V))
-#print(np.linalg.norm(student[0].weight[0].detach().numpy()))
+if set_bias:
+    bias = np.random.normal(0,1,hidden_size)
+    print("bias is: ", bias)
 
-np.save("hiddenSize_3_seed_100_W.npy", W)
-np.save("hiddenSize_3_seed_100_V.npy", V)
-
-V_torch = torch.from_numpy(V)
-W_torch = torch.from_numpy(W)
+# Save initial weights
+np.save("./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_seed_" + str(seed) + "_W.npy", W)
+np.save("./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_seed_" + str(seed) + "_V.npy", V)
+if set_bias:
+    np.save("./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_seed_" + str(seed) + "_bias.npy", bias) 
 
 # Set weights
+V_torch = torch.from_numpy(V)
+W_torch = torch.from_numpy(W)
+if set_bias:
+    bias_torch = torch.from_numpy(bias)
 with torch.no_grad():
     student[0].weight = nn.Parameter(W_torch)
     student[2].weight = nn.Parameter(V_torch)
-
-# print(student[2].weight) 
-# print(student[0].weight)     
+    if set_bias:
+        student[0].bias = nn.Parameter(bias_torch)
 
 # Generate test data
 X = np.zeros((test_data_size,input_dim))
 Y = np.zeros((test_data_size,1))
 for i in range(test_data_size):
-    input = np.random.normal(0,1,3)
+    input = np.random.normal(0,1,input_dim) 
     input = input / np.linalg.norm(input)
     X[i] = input
     Y[i] = float((student(torch.from_numpy(input)).data[0]))
 
 X_torch_test = torch.from_numpy(X)
 Y_torch_test = torch.from_numpy(Y)
-print(X_torch_test[-1], Y_torch_test[-1])
 
 # Generate training data
 X = np.zeros((train_data_size,input_dim))
 Y = np.zeros((train_data_size,1))
 for i in range(train_data_size):
-    input = np.random.normal(0,1,3)
+    input = np.random.normal(0,1,input_dim) 
     input = input / np.linalg.norm(input)
     X[i] = input
     Y[i] = float((student(torch.from_numpy(input)).data[0]))
+    
+np.save("./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_seed_" + str(seed) + "_bias_" + str(set_bias) + "_train_X.npy", X)
+np.save("./exp4_results/inputDim_" + str(input_dim) + "_hiddenSize_" + str(hidden_size) + "_seed_" + str(seed) + "_bias_" + str(set_bias) + "_train_Y.npy", Y)
 
 X_torch = torch.from_numpy(X)
 Y_torch = torch.from_numpy(Y)
 print(X.shape, Y.shape)
 print(X_torch[-1], Y_torch[-1])
-# # Load test data
-# test_data = np.load("./exp2_results/exp2_data.npy", allow_pickle=True)
-# test_data = test_data.item()
-# print(test_data["X"])
 
 ##### Training Part ######
-scalings = [0.01, 3]
-# scalings = [0.01]
 hidden_size_s =  hidden_size * overparam
-teacher_o = nn.Sequential(nn.Linear(input_dim, hidden_size_s, bias=False),
+teacher_o = nn.Sequential(nn.Linear(input_dim, hidden_size_s, bias=set_bias),
                                 nn.ReLU(),
                                 nn.Linear(hidden_size_s, 1, bias=False))
 print(teacher_o)
 
-## takes in a module and applies the specified weight initialization
-def weights_init_normal(m):
-    '''Takes in a module and initializes all linear layers with weight
-        values taken from a normal distribution.'''
-
-    classname = m.__class__.__name__
-    # for every Linear layer in a model
-    if classname.find('Linear') != -1:
-        y = m.in_features
-    # m.weight.data shoud be taken from a normal distribution
-        m.weight.data.normal_(0.0,1/np.sqrt(y))
-
-# teacher.apply(weights_init_normal)
+# Initialize teacher with Xavier Normal
 torch.nn.init.xavier_normal_(teacher_o[0].weight)
+# torch.nn.init.xavier_normal_(teacher_o[0].bias)
 torch.nn.init.xavier_normal_(teacher_o[2].weight)
 
 for scaling in scalings:
+    epoch = 0
+    loss = 1
+    losses = []
+    
+    # Copy original teacher
     teacher = copy.deepcopy(teacher_o)
-    #scale weighting
+    
+    # Scale the weights
     with torch.no_grad():
         teacher[0].weight *= scaling
         teacher[2].weight *= scaling
+        if set_bias:
+            teacher[0].bias *= scaling
+            print(teacher[0].bias)
     
-    all_W = copy.deepcopy(teacher[0].weight.detach().unsqueeze(0))
-    all_V = copy.deepcopy(teacher[2].weight.detach().unsqueeze(0))
-    
-    print(all_W)
-
-    learning_rate = 0.25
-    target_err = 1e-8
-    epoch = 0
-
     optimizer = optim.SGD(teacher.parameters(), lr=learning_rate)
 
-    loss = 1
-    losses = []
-    with open("hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + "_seed_" + str(seed) + ".txt", 'w') as f:
+    with open( save_name + "_scaling_" + str(scaling) + "_seed_" + str(seed) + "_bias_" + str(set_bias) + ".txt", 'w') as f:
         while loss > target_err:
             optimizer.zero_grad()
             y_hat = teacher(X_torch.float())
-            # print(y_hat)
             diff = torch.abs(y_hat - Y_torch).pow(2)
             loss = torch.mean(diff) # MSE
             loss.backward()
             optimizer.step()
-            losses.append(loss.detach().numpy())
             epoch += 1
-            if epoch <= 2000:
-                all_W = torch.cat((all_W,teacher[0].weight.detach().unsqueeze(0)),0)
-                all_V = torch.cat((all_V,teacher[2].weight.detach().unsqueeze(0)),0)
-            elif epoch % 1000 == 0:
-                all_W = torch.cat((all_W,teacher[0].weight.detach().unsqueeze(0)),0)
-                all_V = torch.cat((all_V,teacher[2].weight.detach().unsqueeze(0)),0)
             if epoch % 1000 == 0:
                 print(epoch, loss)
                 f.write(str(epoch) + ": " + str(loss))
                 f.write('\n')
         
-        all_weights = {"W": all_W, "V": all_V}
-        save_name = "hiddenSize_" + str(hidden_size) + "_overFactor_x" + str(overparam) + "_dataSize_" + str(train_data_size) + "_LR_" + str(learning_rate) + "_epochs_" + str(epoch) + "_target_" + str(target_err) + "_scaling_" + str(scaling) + "_seed_" + str(seed)   
-        np.save(save_name + ".npy", losses)  
-        torch.save(all_weights, save_name + "_weights.pt")
-        
+        final_weights = {"W": teacher[0].weight.detach(), "V": teacher[2].weight.detach()}
+        torch.save(final_weights, save_name + "_epochs_" + str(epoch) + "_scaling_" + str(scaling) + "_seed_" + str(seed) + "_bias_" + str(set_bias) +"_weights.pt")
+
         # Test the network
         teacher.eval()
         with torch.no_grad():  
@@ -164,6 +147,5 @@ for scaling in scalings:
             loss = torch.mean(diff) # MSE
             f.write("Scaling: " + str(scaling) + "Loss: " + str(loss))
             print("Scaling: ", scaling, "Loss: ", loss)
-        # print(teacher[0].weight)
-        
+
         del teacher
