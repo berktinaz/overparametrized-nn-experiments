@@ -1,4 +1,4 @@
-# overparametrized-nn-experiments
+# Experiments for the Lazy vs Rich regimes of shallow ReLU neural networks
 
 * Experiment 1: Effect of overparametrization
     * Final settings: 
